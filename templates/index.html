@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered Resume Screening Tool — upload resumes, match against job descriptions, and rank candidates using NLP and machine learning.">
+    <title>AI Resume Screener</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ═══════════════════════ HEADER ═══════════════════════ -->
+        <header class="app-header">
+            <span class="logo-icon">🤖</span>
+            <h1>AI Resume Screener</h1>
+            <p>Upload resumes &amp; match them against your job description using NLP</p>
+        </header>
+
+        <!-- ═══════════════════════ ERROR ALERT ═══════════════════════ -->
+        {% if error %}
+        <div class="alert-error" id="error-alert">
+            <span>⚠️</span> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- ═══════════════════════ INPUT FORM ═══════════════════════ -->
+        <form action="/screen" method="POST" enctype="multipart/form-data">
+
+            <!-- Job Description Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">📋</span> Job Description
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="job_description">Paste the job requirements below</label>
+                    <textarea
+                        id="job_description"
+                        name="job_description"
+                        placeholder="e.g. We are looking for a Python developer with experience in Flask, machine learning, SQL databases, and REST APIs. The candidate should have strong communication skills and teamwork abilities..."
+                    >{{ job_description if job_description else '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- Resume Upload Card -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">📄</span> Upload Resumes
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Select PDF files</label>
+                    <div class="file-upload-area" id="upload-area">
+                        <span class="upload-icon">☁️</span>
+                        <p>Drag &amp; drop PDF resumes here or <span class="browse-link">browse files</span></p>
+                        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem;">Only .pdf files are accepted</p>
+                        <input
+                            type="file"
+                            id="resumes"
+                            name="resumes"
+                            accept=".pdf"
+                            multiple
+                            required
+                        >
+                        <div class="file-names" id="file-names"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn-submit" id="btn-screen">
+                <span>🔍</span> Screen Resumes
+            </button>
+
+        </form>
+
+        <!-- ═══════════════════════ RESULTS ═══════════════════════ -->
+        {% if results is not none %}
+        <div class="results-header">
+            <h2>📊 Screening Results</h2>
+            <p>{{ results | length }} candidate{{ 's' if results | length != 1 else '' }} ranked by match score</p>
+        </div>
+
+        {% if results | length == 0 %}
+        <div class="card" style="text-align: center;">
+            <p style="color: var(--text-secondary);">No valid PDF resumes were processed. Please try again.</p>
+        </div>
+        {% endif %}
+
+        {% for candidate in results %}
+        <div class="candidate-card" style="animation-delay: {{ loop.index0 * 0.07 }}s;">
+
+            <!-- Rank Badge -->
+            <div class="rank-badge {% if candidate.rank == 1 %}rank-1{% elif candidate.rank == 2 %}rank-2{% elif candidate.rank == 3 %}rank-3{% else %}rank-default{% endif %}">
+                #{{ candidate.rank }}
+            </div>
+
+            <!-- Candidate Info -->
+            <div class="candidate-info">
+                <h3>{{ candidate.filename }}</h3>
+                <div class="skills-list">
+                    {% for skill in candidate.skills %}
+                    <span class="skill-tag">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Score Ring -->
+            <div class="score-container">
+                <div class="score-ring {% if candidate.score >= 60 %}score-high{% elif candidate.score >= 30 %}score-mid{% else %}score-low{% endif %}"
+                     style="--score: {{ candidate.score }};">
+                    {{ candidate.score }}%
+                </div>
+                <div class="score-label">Match</div>
+            </div>
+
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+        <footer class="app-footer">
+            AI Resume Screener &bull; Built with Flask, NLTK &amp; scikit-learn
+        </footer>
+
+    </div>
+
+    <!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
+    <script>
+        // Show selected file names in the upload area
+        const fileInput   = document.getElementById('resumes');
+        const fileNames   = document.getElementById('file-names');
+        const uploadArea  = document.getElementById('upload-area');
+
+        fileInput.addEventListener('change', function () {
+            const names = Array.from(this.files).map(f => f.name);
+            if (names.length > 0) {
+                fileNames.textContent = names.join(', ');
+            } else {
+                fileNames.textContent = '';
+            }
+        });
+
+        // Drag-and-drop visual feedback
+        uploadArea.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', function () {
+            this.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', function (e) {
+            this.classList.remove('dragover');
+        });
+    </script>
+
+</body>
+</html>
