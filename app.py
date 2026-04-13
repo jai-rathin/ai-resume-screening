@@ -115,6 +115,6 @@ def screen_resumes():
 
 # ── Run the app ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("\n🚀 Resume Screening App is running!")
+    print("\nResume Screening App is running!")
     print("   Open http://127.0.0.1:5000 in your browser.\n")
     app.run(debug=True)
