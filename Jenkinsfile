@@ -2,17 +2,46 @@ pipeline {
     agent any
 
     stages {
-        stage('Install Dependencies') {
+
+        stage('Checkout') {
             steps {
-                bat '"C:\\Users\\rsacj\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" -m pip install --upgrade pip'
-                bat '"C:\\Users\\rsacj\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" -m pip install -r requirements.txt'
+                echo 'Checking out code from GitHub...'
+                git 'https://github.com/jai-rathin/ai-resume-screening.git'
             }
         }
 
-        stage('Run App') {
+        stage('Setup Environment') {
             steps {
-                bat '"C:\\Users\\rsacj\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" app.py'
+                echo 'Setting up Python Virtual Environment...'
+                bat '''
+                "C:\\Users\\rsacj\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" -m venv venv
+                call venv\\Scripts\\activate
+                venv\\Scripts\\pip install --upgrade pip
+                venv\\Scripts\\pip install -r requirements.txt
+                '''
             }
+        }
+
+        stage('Run Application') {
+            steps {
+                echo 'Running Flask App...'
+                bat '''
+                "C:\\Users\\rsacj\\AppData\\Local\\Programs\\Python\\Python312\\python.exe" app.py
+                '''
+            }
+        }
+
+    }
+
+    post {
+        always {
+            echo 'Pipeline execution complete.'
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Please review the logs.'
         }
     }
 }
