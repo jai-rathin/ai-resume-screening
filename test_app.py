@@ -20,3 +20,4 @@ def test_screen_no_data(client):
     assert response.status_code == 200
     # Should display the missing job description error
     assert b"Please enter a job description" in response.data
+#testing2
