@@ -6,7 +6,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Checking out code from GitHub...'
-                git 'https://github.com/jai-rathin/ai-resume-screening.git'
+                git branch: 'main', url: 'https://github.com/jai-rathin/ai-resume-screening.git'
             }
         }
 
