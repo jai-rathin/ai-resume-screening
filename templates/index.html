@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="AI-powered Resume Screening Tool — upload resumes, match against job descriptions, and rank candidates using NLP and machine learning.">
+        content="AI-powered Resume Screening Tool — upload resumes, match against job descriptions, and predict job categories using NLP and machine learning.">
     <title>AI Resume Screener</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -21,6 +21,16 @@
             <p>Upload resumes &amp; match them against your job description using NLP</p>
         </header>
 
+        <!-- ═══════════════════════ TAB NAVIGATION ═══════════════════════ -->
+        <div class="tab-nav" id="tab-nav">
+            <button class="tab-btn active" id="tab-btn-screen" onclick="switchTab('screen')">
+                <span>🔍</span> Screen Resumes
+            </button>
+            <button class="tab-btn" id="tab-btn-predict" onclick="switchTab('predict')">
+                <span>🧠</span> Predict Category
+            </button>
+        </div>
+
         <!-- ═══════════════════════ ERROR ALERT ═══════════════════════ -->
         {% if error %}
         <div class="alert-error" id="error-alert">
@@ -28,47 +38,91 @@
         </div>
         {% endif %}
 
-        <!-- ═══════════════════════ INPUT FORM ═══════════════════════ -->
-        <form action="/screen" method="POST" enctype="multipart/form-data">
+        <!-- ═══════════════════════ TAB 1: SCREEN RESUMES ═══════════════════════ -->
+        <div class="tab-content active" id="tab-screen">
+            <form action="/screen" method="POST" enctype="multipart/form-data">
 
-            <!-- Job Description Card -->
-            <div class="card">
-                <div class="card-title">
-                    <span class="icon">📋</span> Job Description
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="job_description">Paste the job requirements below</label>
-                    <textarea id="job_description" name="job_description"
-                        placeholder="e.g. We are looking for a Python developer with experience in Flask, machine learning, SQL databases, and REST APIs. The candidate should have strong communication skills and teamwork abilities...">{{ job_description if job_description else '' }}</textarea>
-                </div>
-            </div>
-
-            <!-- Resume Upload Card -->
-            <div class="card">
-                <div class="card-title">
-                    <span class="icon">📄</span> Upload Resumes
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Select PDF files</label>
-                    <div class="file-upload-area" id="upload-area">
-                        <span class="upload-icon">☁️</span>
-                        <p>Drag &amp; drop PDF resumes here or <span class="browse-link">browse files</span></p>
-                        <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem;">Only .pdf files are
-                            accepted</p>
-                        <input type="file" id="resumes" name="resumes" accept=".pdf" multiple required>
-                        <div class="file-names" id="file-names"></div>
+                <!-- Job Description Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📋</span> Job Description
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="job_description">Paste the job requirements below</label>
+                        <textarea id="job_description" name="job_description"
+                            placeholder="e.g. We are looking for a Python developer with experience in Flask, machine learning, SQL databases, and REST APIs. The candidate should have strong communication skills and teamwork abilities...">{{ job_description if job_description else '' }}</textarea>
                     </div>
                 </div>
-            </div>
 
-            <!-- Submit Button -->
-            <button type="submit" class="btn-submit" id="btn-screen">
-                <span>🔍</span> Screen Resumes
-            </button>
+                <!-- Resume Upload Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📄</span> Upload Resumes
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select PDF files</label>
+                        <div class="file-upload-area" id="upload-area-screen">
+                            <span class="upload-icon">☁️</span>
+                            <p>Drag &amp; drop PDF resumes here or <span class="browse-link">browse files</span></p>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem;">Only .pdf files
+                                are accepted</p>
+                            <input type="file" id="resumes" name="resumes" accept=".pdf" multiple required>
+                            <div class="file-names" id="file-names-screen"></div>
+                        </div>
+                    </div>
+                </div>
 
-        </form>
+                <!-- Submit Button -->
+                <button type="submit" class="btn-submit" id="btn-screen">
+                    <span>🔍</span> Screen Resumes
+                </button>
 
-        <!-- ═══════════════════════ RESULTS ═══════════════════════ -->
+            </form>
+        </div>
+
+        <!-- ═══════════════════════ TAB 2: PREDICT CATEGORY ═══════════════════════ -->
+        <div class="tab-content" id="tab-predict">
+            <form action="/predict" method="POST" enctype="multipart/form-data">
+
+                <!-- Info Banner -->
+                <div class="card info-card">
+                    <div class="card-title">
+                        <span class="icon">🧠</span> ML-Powered Category Prediction
+                    </div>
+                    <p class="info-text">
+                        Upload a resume and our trained Machine Learning model will predict which 
+                        <strong>job category</strong> the candidate best fits into, along with a 
+                        confidence score. The model is trained on 2,400+ resumes across 24 categories.
+                    </p>
+                </div>
+
+                <!-- Resume Upload Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">📄</span> Upload Resume
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select a single PDF file</label>
+                        <div class="file-upload-area" id="upload-area-predict">
+                            <span class="upload-icon">☁️</span>
+                            <p>Drag &amp; drop a PDF resume here or <span class="browse-link">browse files</span></p>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem;">Only .pdf files
+                                are accepted</p>
+                            <input type="file" id="resume_file" name="resume_file" accept=".pdf" required>
+                            <div class="file-names" id="file-names-predict"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn-submit btn-predict" id="btn-predict">
+                    <span>🧠</span> Predict Job Category
+                </button>
+
+            </form>
+        </div>
+
+        <!-- ═══════════════════════ SCREENING RESULTS ═══════════════════════ -->
         {% if results is not none %}
         <div class="results-header">
             <h2>📊 Screening Results</h2>
@@ -113,6 +167,65 @@
         {% endfor %}
         {% endif %}
 
+        <!-- ═══════════════════════ PREDICTION RESULT ═══════════════════════ -->
+        {% if prediction %}
+        <div class="results-header prediction-header">
+            <h2>🧠 Prediction Result</h2>
+            <p>ML model prediction for <strong>{{ prediction.filename }}</strong></p>
+        </div>
+
+        {% if prediction.error %}
+        <div class="card" style="text-align: center;">
+            <p style="color: var(--danger);">{{ prediction.error }}</p>
+        </div>
+        {% else %}
+
+        <!-- Main Prediction Card -->
+        <div class="prediction-card">
+            <div class="prediction-main">
+                <div class="prediction-category-label">Predicted Job Category</div>
+                <div class="prediction-category">{{ prediction.category }}</div>
+                <div class="prediction-confidence-bar">
+                    <div class="confidence-fill" style="width: {{ prediction.confidence }}%"></div>
+                </div>
+                <div class="prediction-confidence-text">
+                    Confidence: <strong>{{ prediction.confidence }}%</strong>
+                </div>
+            </div>
+
+            <!-- Top Category Scores -->
+            <div class="prediction-scores">
+                <div class="scores-title">Top Matching Categories</div>
+                {% for cat, score in prediction.all_scores.items() %}
+                <div class="score-bar-row">
+                    <span class="score-bar-label">{{ cat }}</span>
+                    <div class="score-bar-track">
+                        <div class="score-bar-fill {% if loop.index == 1 %}bar-primary{% else %}bar-secondary{% endif %}"
+                            style="width: {{ score }}%; animation-delay: {{ loop.index0 * 0.1 }}s;"></div>
+                    </div>
+                    <span class="score-bar-value">{{ score }}%</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Extracted Skills -->
+        {% if prediction.skills %}
+        <div class="card prediction-skills-card">
+            <div class="card-title">
+                <span class="icon">💡</span> Extracted Skills
+            </div>
+            <div class="skills-list">
+                {% for skill in prediction.skills %}
+                <span class="skill-tag">{{ skill }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+        {% endif %}
+
         <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
         <footer class="app-footer">
             AI Resume Screener &bull; Built with Flask, NLTK &amp; scikit-learn
@@ -122,32 +235,52 @@
 
     <!-- ═══════════════════════ JAVASCRIPT ═══════════════════════ -->
     <script>
-        // Show selected file names in the upload area
-        const fileInput = document.getElementById('resumes');
-        const fileNames = document.getElementById('file-names');
-        const uploadArea = document.getElementById('upload-area');
+        // ── Tab Switching ────────────────────────────────────────────
+        function switchTab(tab) {
+            // Toggle tab buttons
+            document.getElementById('tab-btn-screen').classList.toggle('active', tab === 'screen');
+            document.getElementById('tab-btn-predict').classList.toggle('active', tab === 'predict');
 
-        fileInput.addEventListener('change', function () {
+            // Toggle tab content
+            document.getElementById('tab-screen').classList.toggle('active', tab === 'screen');
+            document.getElementById('tab-predict').classList.toggle('active', tab === 'predict');
+        }
+
+        // Auto-switch to predict tab if prediction results are shown
+        {% if prediction %}
+        switchTab('predict');
+        {% endif %}
+
+        // ── File Name Display (Screen Tab) ───────────────────────────
+        const fileInputScreen = document.getElementById('resumes');
+        const fileNamesScreen = document.getElementById('file-names-screen');
+
+        fileInputScreen.addEventListener('change', function () {
             const names = Array.from(this.files).map(f => f.name);
-            if (names.length > 0) {
-                fileNames.textContent = names.join(', ');
-            } else {
-                fileNames.textContent = '';
-            }
+            fileNamesScreen.textContent = names.length > 0 ? names.join(', ') : '';
         });
 
-        // Drag-and-drop visual feedback
-        uploadArea.addEventListener('dragover', function (e) {
-            e.preventDefault();
-            this.classList.add('dragover');
+        // ── File Name Display (Predict Tab) ──────────────────────────
+        const fileInputPredict = document.getElementById('resume_file');
+        const fileNamesPredict = document.getElementById('file-names-predict');
+
+        fileInputPredict.addEventListener('change', function () {
+            const names = Array.from(this.files).map(f => f.name);
+            fileNamesPredict.textContent = names.length > 0 ? names.join(', ') : '';
         });
 
-        uploadArea.addEventListener('dragleave', function () {
-            this.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', function (e) {
-            this.classList.remove('dragover');
+        // ── Drag-and-drop visual feedback ────────────────────────────
+        document.querySelectorAll('.file-upload-area').forEach(area => {
+            area.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+            area.addEventListener('dragleave', function () {
+                this.classList.remove('dragover');
+            });
+            area.addEventListener('drop', function () {
+                this.classList.remove('dragover');
+            });
         });
     </script>
 
