@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/cppe%28project%29/mlruns/540433845182816620/a952bad75cd2417ea73ed6188a5385c2/artifacts
+end_time: 1777266152673
+entry_point_name: ''
+experiment_id: '540433845182816620'
+lifecycle_stage: active
+run_id: a952bad75cd2417ea73ed6188a5385c2
+run_name: RandomForest
+run_uuid: a952bad75cd2417ea73ed6188a5385c2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1777266148337
+status: 3
+tags: []
+user_id: rsacj

@@ -1,0 +1,9 @@
+{
+  "model_type": "RandomForest",
+  "accuracy": 0.710262,
+  "f1_macro": 0.637753,
+  "f1_weighted": 0.686315,
+  "mlflow_run_id": "a952bad75cd2417ea73ed6188a5385c2",
+  "mlflow_experiment": "resume-screening",
+  "tfidf_max_features": 5000
+}

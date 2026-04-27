@@ -1,126 +1,233 @@
 """
 train_model.py
 --------------
-Trains a resume-category classifier using the Resume.csv dataset.
+Trains TWO resume-category classifiers and tracks both with MLflow.
 
-Steps:
-    1. Load dataset from CSV
-    2. Preprocess text (lowercase, remove stopwords & special characters)
-    3. Convert text to TF-IDF features
-    4. Train a Logistic Regression model
-    5. Save model + vectorizer to the models/ folder
+Models:
+  1. Logistic Regression  (TF-IDF + LR)
+  2. Random Forest        (TF-IDF + RF)
+
+MLflow tracks every run's parameters, metrics, and artifacts.
+The best model (by test accuracy) is saved to models/ and marked
+as the production model in model_info.json.
 
 Usage:
     python train_model.py
+
+MLflow UI:
+    mlflow ui          # visit http://127.0.0.1:5000
 """
 
 import os
 import re
+import json
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    classification_report,
+)
 import joblib
+import mlflow
+import mlflow.sklearn
 
-# ── Download NLTK data (runs once) ───────────────────────────────────────────
+# ── NLTK setup ────────────────────────────────────────────────────────────────
 nltk.download("stopwords", quiet=True)
 
+# ── MLflow experiment name ────────────────────────────────────────────────────
+EXPERIMENT_NAME = "resume-screening"
 
-# ── Text Preprocessing ──────────────────────────────────────────────────────
-def clean_text(text):
-    """
-    Clean and preprocess a single resume text string.
+# ── Output paths ──────────────────────────────────────────────────────────────
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+MODEL_PATH = os.path.join(MODELS_DIR, "model.pkl")
+VECTORIZER_PATH = os.path.join(MODELS_DIR, "vectorizer.pkl")
+MODEL_INFO_PATH = os.path.join(MODELS_DIR, "model_info.json")
 
-    Steps:
-        1. Convert to lowercase
-        2. Remove URLs
-        3. Remove special characters (keep only letters and spaces)
-        4. Remove extra whitespace
-        5. Remove English stopwords
-    """
+
+# ── Text Preprocessing ────────────────────────────────────────────────────────
+def clean_text(text: str) -> str:
+    """Lowercase, strip URLs/special chars, remove stopwords."""
     if not isinstance(text, str):
         return ""
-
-    # Lowercase
     text = text.lower()
-
-    # Remove URLs
     text = re.sub(r"http\S+|www\S+", "", text)
-
-    # Remove special characters and numbers (keep only letters and spaces)
     text = re.sub(r"[^a-z\s]", "", text)
-
-    # Remove extra whitespace
     text = re.sub(r"\s+", " ", text).strip()
-
-    # Remove stopwords
     stop_words = set(stopwords.words("english"))
-    words = text.split()
-    words = [word for word in words if word not in stop_words]
-
-    return " ".join(words)
+    return " ".join(w for w in text.split() if w not in stop_words)
 
 
-# ── Main Training Pipeline ──────────────────────────────────────────────────
-def train():
-    """Load data, preprocess, train model, and save to disk."""
-
-    # ── Step 1: Load the dataset ─────────────────────────────────────────
+# ── Load & preprocess dataset ─────────────────────────────────────────────────
+def load_data():
     csv_path = os.path.join("dataset", "Resume", "Resume.csv")
-    print(f"[1/5] Loading dataset from '{csv_path}' ...")
-
+    print(f"\n[DATA] Loading dataset from '{csv_path}' ...")
     df = pd.read_csv(csv_path)
-    print(f"       Loaded {len(df)} resumes across {df['Category'].nunique()} categories.\n")
+    print(f"       {len(df)} resumes | {df['Category'].nunique()} categories")
 
-    # ── Step 2: Preprocess text ──────────────────────────────────────────
-    print("[2/5] Preprocessing resume text ...")
+    print("[DATA] Cleaning text ...")
     df["cleaned"] = df["Resume_str"].apply(clean_text)
+    df = df[df["cleaned"].str.len() > 0].reset_index(drop=True)
+    print(f"       {len(df)} resumes after cleaning\n")
+    return df
 
-    # Drop rows with empty cleaned text
-    df = df[df["cleaned"].str.len() > 0]
-    print(f"       {len(df)} resumes after cleaning.\n")
 
-    # ── Step 3: TF-IDF Vectorization ─────────────────────────────────────
-    print("[3/5] Building TF-IDF features ...")
-    vectorizer = TfidfVectorizer(max_features=5000)
+# ── TF-IDF vectorisation ──────────────────────────────────────────────────────
+def vectorise(df, max_features: int = 5000):
+    vectorizer = TfidfVectorizer(max_features=max_features)
     X = vectorizer.fit_transform(df["cleaned"])
     y = df["Category"]
-    print(f"       Feature matrix shape: {X.shape}\n")
+    return X, y, vectorizer
 
-    # ── Step 4: Train/Test Split & Model Training ────────────────────────
-    print("[4/5] Training Logistic Regression model ...")
+
+# ── Train + log one model run ─────────────────────────────────────────────────
+def train_and_log(
+    model_name: str,
+    model,
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    vectorizer,
+    extra_params: dict,
+):
+    """
+    Fit `model`, compute metrics, log everything to MLflow,
+    and return a results dict.
+    """
+    with mlflow.start_run(run_name=model_name):
+        # ── log hyper-params ─────────────────────────────────────────────────
+        mlflow.log_param("model_type", model_name)
+        mlflow.log_param("tfidf_max_features", vectorizer.max_features)
+        for k, v in extra_params.items():
+            mlflow.log_param(k, v)
+
+        # ── train ─────────────────────────────────────────────────────────────
+        print(f"  [RUN] Training {model_name} ...")
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        # ── metrics ───────────────────────────────────────────────────────────
+        accuracy = accuracy_score(y_test, y_pred)
+        f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
+        f1_weighted = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+
+        mlflow.log_metric("accuracy", accuracy)
+        mlflow.log_metric("f1_macro", f1_macro)
+        mlflow.log_metric("f1_weighted", f1_weighted)
+
+        # ── log sklearn model artifact ────────────────────────────────────────
+        mlflow.sklearn.log_model(model, artifact_path="model")
+
+        # ── console report ────────────────────────────────────────────────────
+        print(f"       Accuracy : {accuracy:.4f}")
+        print(f"       F1 Macro : {f1_macro:.4f}")
+        print(f"       F1 Weighted: {f1_weighted:.4f}")
+        print(classification_report(y_test, y_pred, zero_division=0))
+
+        run_id = mlflow.active_run().info.run_id
+
+    return {
+        "model_name": model_name,
+        "model": model,
+        "accuracy": accuracy,
+        "f1_macro": f1_macro,
+        "f1_weighted": f1_weighted,
+        "run_id": run_id,
+    }
+
+
+# ── Main training pipeline ────────────────────────────────────────────────────
+def train():
+    os.makedirs(MODELS_DIR, exist_ok=True)
+
+    # ── MLflow setup ──────────────────────────────────────────────────────────
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    print(f"[MLFLOW] Experiment: '{EXPERIMENT_NAME}'")
+
+    # ── Load data ─────────────────────────────────────────────────────────────
+    df = load_data()
+    MAX_FEATURES = 5000
+    X, y, vectorizer = vectorise(df, max_features=MAX_FEATURES)
+
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
+    print(f"[SPLIT] Train: {X_train.shape[0]} | Test: {X_test.shape[0]}\n")
 
-    model = LogisticRegression(max_iter=1000, random_state=42)
-    model.fit(X_train, y_train)
+    # ── Model 1: Logistic Regression ──────────────────────────────────────────
+    lr_params = {"C": 1.0, "max_iter": 1000, "solver": "lbfgs"}
+    lr_result = train_and_log(
+        model_name="LogisticRegression",
+        model=LogisticRegression(
+            C=lr_params["C"],
+            max_iter=lr_params["max_iter"],
+            solver=lr_params["solver"],
+            random_state=42,
+        ),
+        X_train=X_train, X_test=X_test,
+        y_train=y_train, y_test=y_test,
+        vectorizer=vectorizer,
+        extra_params=lr_params,
+    )
 
-    # Evaluate on test set
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"       Test Accuracy: {accuracy:.2%}\n")
-    print("       Classification Report:")
-    print(classification_report(y_test, y_pred))
+    # ── Model 2: Random Forest ────────────────────────────────────────────────
+    rf_params = {"n_estimators": 200, "max_depth": None, "min_samples_split": 2}
+    rf_result = train_and_log(
+        model_name="RandomForest",
+        model=RandomForestClassifier(
+            n_estimators=rf_params["n_estimators"],
+            max_depth=rf_params["max_depth"],
+            min_samples_split=rf_params["min_samples_split"],
+            random_state=42,
+            n_jobs=-1,
+        ),
+        X_train=X_train, X_test=X_test,
+        y_train=y_train, y_test=y_test,
+        vectorizer=vectorizer,
+        extra_params=rf_params,
+    )
 
-    # ── Step 5: Save model and vectorizer ────────────────────────────────
-    models_dir = os.path.join(os.path.dirname(__file__), "models")
-    os.makedirs(models_dir, exist_ok=True)
+    # ── Compare & pick best model ─────────────────────────────────────────────
+    results = [lr_result, rf_result]
+    best = max(results, key=lambda r: r["accuracy"])
+    print("=" * 60)
+    print(f"[COMPARE] Results summary:")
+    for r in results:
+        marker = "  ← BEST" if r is best else ""
+        print(f"  {r['model_name']:25s}  acc={r['accuracy']:.4f}  "
+              f"f1={r['f1_macro']:.4f}{marker}")
+    print("=" * 60)
+    print(f"\n[BEST]  {best['model_name']} with accuracy {best['accuracy']:.4f}")
 
-    model_path = os.path.join(models_dir, "model.pkl")
-    vectorizer_path = os.path.join(models_dir, "vectorizer.pkl")
+    # ── Save best model + vectorizer ──────────────────────────────────────────
+    joblib.dump(best["model"], MODEL_PATH)
+    joblib.dump(vectorizer, VECTORIZER_PATH)
 
-    joblib.dump(model, model_path)
-    joblib.dump(vectorizer, vectorizer_path)
+    model_info = {
+        "model_type": best["model_name"],
+        "accuracy": round(best["accuracy"], 6),
+        "f1_macro": round(best["f1_macro"], 6),
+        "f1_weighted": round(best["f1_weighted"], 6),
+        "mlflow_run_id": best["run_id"],
+        "mlflow_experiment": EXPERIMENT_NAME,
+        "tfidf_max_features": MAX_FEATURES,
+    }
+    with open(MODEL_INFO_PATH, "w") as f:
+        json.dump(model_info, f, indent=2)
 
-    print(f"[5/5] Model saved to '{model_path}'")
-    print(f"       Vectorizer saved to '{vectorizer_path}'")
-    print("\n[DONE] Training complete!")
+    print(f"\n[SAVED] model.pkl       → {MODEL_PATH}")
+    print(f"[SAVED] vectorizer.pkl  → {VECTORIZER_PATH}")
+    print(f"[SAVED] model_info.json → {MODEL_INFO_PATH}")
+    print("\n[DONE] Training complete! Run  'mlflow ui'  to explore results.\n")
 
 
-# ── Entry Point ──────────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     train()
